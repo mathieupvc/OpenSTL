@@ -100,7 +100,7 @@ class MovingMNIST(Dataset):
         self.mean = 0
         self.std = 1
 
-    def get_random_trajectory(self, seq_length):
+    def get_random_trajectory(self, seq_length, temperature=0.1):
         ''' Generate a random sequence of a MNIST digit '''
         canvas_size = self.image_size_ - self.digit_size_
         x = random.random()
@@ -115,6 +115,10 @@ class MovingMNIST(Dataset):
         bounce_x = 1
         bounce_y = 1
         for i, v_x, v_y in zip(range(seq_length), v_xs, v_ys):
+            # Add randomness to velocity directions
+            v_x += np.random.normal(scale=temperature)
+            v_y += np.random.normal(scale=temperature)
+
             # Take a step along velocity.
             y += bounce_y * v_y * self.step_length_
             x += bounce_x * v_x * self.step_length_

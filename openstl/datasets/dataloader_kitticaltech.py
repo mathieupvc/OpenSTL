@@ -115,6 +115,7 @@ class DataProcess(object):
                 data = []
                 fileidx = []
                 for seq_id in os.listdir(caltech_root):
+                    print(seq_id)
                     if osp.isdir(osp.join(caltech_root, seq_id)) is False:
                         continue
                     for item in os.listdir(osp.join(caltech_root, seq_id)):
