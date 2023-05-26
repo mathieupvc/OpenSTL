@@ -4,6 +4,7 @@ from .dataloader_human import HumanDataset
 from .dataloader_kitticaltech import KittiCaltechDataset
 from .dataloader_kth import KTHDataset
 from .dataloader_moving_mnist import MovingMNIST
+from .dataloader_moving_discs import MovingDISCS
 from .dataloader_taxibj import TaxibjDataset
 from .dataloader_weather import WeatherBenchDataset
 from .dataloader import load_data
@@ -12,7 +13,7 @@ from .pipelines import *
 from .utils import create_loader
 
 __all__ = [
-    'KittiCaltechDataset', 'HumanDataset', 'KTHDataset', 'MovingMNIST', 'TaxibjDataset',
+    'KittiCaltechDataset', 'HumanDataset', 'KTHDataset', 'MovingMNIST', 'MovingDISCS', 'TaxibjDataset',
     'WeatherBenchDataset',
     'load_data', 'dataset_parameters', 'create_loader',
 ]

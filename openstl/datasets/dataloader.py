@@ -35,6 +35,9 @@ def load_data(dataname, batch_size, val_batch_size, num_workers, data_root, dist
         from .dataloader_kinetics import load_data
         cfg_dataloader['data_name'] = kwargs.get('data_name', 'kinetics400')
         return load_data(batch_size, val_batch_size, data_root, num_workers, **cfg_dataloader)
+    elif dataname == 'mdiscs':
+        from .dataloader_moving_discs import load_data
+        return load_data(batch_size, val_batch_size, data_root, num_workers, **cfg_dataloader)
     elif dataname == 'taxibj':
         from .dataloader_taxibj import load_data
         return load_data(batch_size, val_batch_size, data_root, num_workers, **cfg_dataloader)

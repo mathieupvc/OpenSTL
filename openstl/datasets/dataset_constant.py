@@ -38,6 +38,13 @@ dataset_parameters = {
         'data_name': 'noisymmnist',
         'metrics': ['mse', 'mae', 'ssim', 'psnr'],
     },
+    'mdiscs': {
+            'in_shape': [10, 1, 20, 20],
+            'pre_seq_length': 10,
+            'aft_seq_length': 10,
+            'total_length': 20,
+            'data_name': 'mnist',
+        },
     'taxibj': {
         'in_shape': [4, 2, 32, 32],
         'pre_seq_length': 4,
