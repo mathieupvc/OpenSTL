@@ -43,7 +43,7 @@ dataset_parameters = {
             'pre_seq_length': 10,
             'aft_seq_length': 10,
             'total_length': 20,
-            'data_name': 'mnist',
+            'data_name': 'mdiscs',
         },
     'taxibj': {
         'in_shape': [4, 2, 32, 32],

@@ -49,6 +49,8 @@ class MovingDISCS(Dataset):
         self.n_frames_total = self.n_frames_input + self.n_frames_output
         self.transform = transform
         self.use_augment = use_augment
+        self.mean = 0
+        self.std = 1
 
     def __getitem__(self, idx):
         length = self.n_frames_input + self.n_frames_output
