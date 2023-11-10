@@ -39,11 +39,12 @@ dataset_parameters = {
         'metrics': ['mse', 'mae', 'ssim', 'psnr'],
     },
     'mdiscs': {
-            'in_shape': [10, 1, 20, 20],
+            'in_shape': [10, 1, 864, 864],
             'pre_seq_length': 10,
             'aft_seq_length': 10,
             'total_length': 20,
             'data_name': 'mdiscs',
+            'metrics': ['mse'],
         },
     'taxibj': {
         'in_shape': [4, 2, 32, 32],
