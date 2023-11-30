@@ -40,7 +40,7 @@ class MovingDISCS(Dataset):
     """
 
     def __init__(self, root, is_train=True, n_frames_input=10, n_frames_output=10,
-                 image_size=50, discs_radius=40, transform=None, use_augment=False):
+                 image_size=64, discs_radius=4, transform=None, use_augment=False):
         super(MovingDISCS, self).__init__()
 
         self.dataset = None
@@ -59,7 +59,7 @@ class MovingDISCS(Dataset):
         self.mean = 0
         self.std = 1
 
-    def generate_moving_discs(self, num_discs=10, sigma=135, tau=0.08, dt=1/30, repulsive_force=13500, size_after_crop=500, downsampling_factor=10):
+    def generate_moving_discs(self, num_discs=10, sigma=135, tau=0.08, dt=1/30, repulsive_force=13500, original_size=864, size_after_crop=640, downsampling_factor=10):
         """
         Get random trajectories for the discs and generate a video.
         """
@@ -67,8 +67,10 @@ class MovingDISCS(Dataset):
         data = 248 * np.ones((self.n_frames_total, self.image_size_, self.image_size_),
                              dtype=np.uint8)  # 248 is the maximum when using 32 gray levels
 
+        crop_size = int((original_size - size_after_crop) / 2)
+
         # Initialize random positions for each disc
-        positions = np.random.randint(self.discs_radius_ + 1, self.image_size_ - self.discs_radius_ - 1, size=(num_discs, 2))
+        positions = np.random.randint(self.discs_radius_ + 1, original_size - self.discs_radius_ - 1, size=(num_discs, 2))
 
         # Initialize random velocities for each disc
         velocities = np.random.normal(loc=0, scale=10, size=(num_discs, 2))
@@ -86,10 +88,10 @@ class MovingDISCS(Dataset):
 
                 # Repulsive force with image borders
                 dist_to_borders = np.min(np.stack([positions[i] - [self.discs_radius_, self.discs_radius_],
-                                                   [self.image_size_ - self.discs_radius_, self.image_size_ - self.discs_radius_] -
+                                                   [original_size - self.discs_radius_, original_size - self.discs_radius_] -
                                                    positions[i]]))
                 force = repulsive_force / (dist_to_borders)
-                force_direction = - np.sign(positions[i] - self.image_size_ / 2) / np.sqrt(2)
+                force_direction = - np.sign(positions[i] - original_size / 2) / np.sqrt(2)
                 velocities[i] += force * force_direction * dt
 
             # Generate random noise
@@ -99,7 +101,7 @@ class MovingDISCS(Dataset):
 
             # Boundary checks and adjustment of velocities
             positions = positions + velocities * dt  # convert back to pixels
-            positions = np.clip(positions, self.discs_radius_ + 1, self.image_size_ - self.discs_radius_ - 1)
+            positions = np.clip(positions, self.discs_radius_ + 1, original_size - self.discs_radius_ - 1)
 
             # update positions list
             positions_list.append(positions)
@@ -110,13 +112,17 @@ class MovingDISCS(Dataset):
         # add discs to data
         for i in range(self.n_frames_total):
             for n in range(num_discs):
-                xx, yy = skimage.draw.disk((positions_list[i][n, 0], positions_list[i][n, 1]), self.discs_radius_ + 1,
+                xx, yy = skimage.draw.disk((round((positions_list[i][n, 0] - crop_size) / downsampling_factor), round((positions_list[i][n, 1] - crop_size) / downsampling_factor)), self.discs_radius_ + 1,
                                            shape=data[i].shape)  # +1 is for skimage behavior
                 data[i, xx, yy] = 0
+        # for i in range(self.n_frames_total):
+        #     print(positions_list[i])
+        #     plt.imshow(data[i], cmap='gray')
+        #     plt.show()
 
-        crop_size = int((data.shape[1] - size_after_crop) / 2)
-        data = data[:, crop_size:-crop_size, crop_size:-crop_size]
-        data = downscale_local_mean(data.astype(np.float16), (1, downsampling_factor, downsampling_factor)).astype(np.uint8)
+        # crop_size = int((data.shape[1] - size_after_crop) / 2)
+        # data = data[:, crop_size:-crop_size, crop_size:-crop_size]
+        # data = downscale_local_mean(data.astype(np.float16), (1, downsampling_factor, downsampling_factor)).astype(np.uint8)
 
         data = data[..., np.newaxis]
         return data
@@ -141,8 +147,10 @@ class MovingDISCS(Dataset):
         else:
             output = []
 
-        output = torch.from_numpy(output).contiguous().float()
-        input = torch.from_numpy(input).contiguous().float()
+        # output = torch.from_numpy(output).contiguous().float()
+        # input = torch.from_numpy(input).contiguous().float()
+        output = torch.from_numpy(output / 255.0).contiguous().float()
+        input = torch.from_numpy(input / 255.0).contiguous().float()
 
         # if self.use_augment:
         #     imgs = self._augment_seq(torch.cat([input, output], dim=0), crop_scale=0.94)
@@ -156,10 +164,10 @@ class MovingDISCS(Dataset):
 
 
 def load_data(batch_size, val_batch_size, data_root, num_workers=4,
-              pre_seq_length=10, aft_seq_length=10, in_shape=[10, 1, 864, 864],
+              pre_seq_length=10, aft_seq_length=10, in_shape=[10, 1, 64, 64],
               distributed=False, use_augment=False, use_prefetcher=False, drop_last=False):
 
-    image_size = in_shape[-1] if in_shape is not None else 864
+    image_size = in_shape[-1] if in_shape is not None else 64
     train_set = MovingDISCS(root=data_root, is_train=True,
                             n_frames_input=pre_seq_length,
                             n_frames_output=aft_seq_length,
