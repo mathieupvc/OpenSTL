@@ -134,7 +134,8 @@ class MovingDISCS(Dataset):
             # Generate data on the fly
             images = self.generate_moving_discs(num_discs=10)
         else:
-            images = self.dataset[:, idx, ...]
+            images = self.generate_moving_discs(num_discs=10)
+            # images = self.dataset[:, idx, ...]
 
         r = 1
         w = int(self.image_size_ / r)
