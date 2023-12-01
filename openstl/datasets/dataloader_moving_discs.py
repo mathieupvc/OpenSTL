@@ -45,8 +45,8 @@ class MovingDISCS(Dataset):
 
         self.dataset = None
         self.is_train = is_train
-        if not is_train:
-            self.dataset = load_fixed_set(root, 'test')
+        # if not is_train:
+        #     self.dataset = load_fixed_set(root, 'test')
         self.length = int(1e4) if self.dataset is None else self.dataset.shape[1]
 
         self.n_frames_input = n_frames_input
