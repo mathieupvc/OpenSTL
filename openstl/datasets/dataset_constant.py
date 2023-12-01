@@ -44,7 +44,7 @@ dataset_parameters = {
             'aft_seq_length': 10,
             'total_length': 20,
             'data_name': 'mdiscs',
-            'metrics': ['mse'],
+            'metrics': ['mse', 'mae'],
         },
     'taxibj': {
         'in_shape': [4, 2, 32, 32],
