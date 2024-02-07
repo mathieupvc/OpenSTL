@@ -23,6 +23,9 @@ def load_data(dataname, batch_size, val_batch_size, num_workers, data_root, dist
     elif 'kth' in dataname:  # 'kth', 'kth20', 'kth40'
         from .dataloader_kth import load_data
         return load_data(batch_size, val_batch_size, data_root, num_workers, **cfg_dataloader)
+    elif 'dataname' == 'davis':
+        from .dataloader_davis import load_data
+        return load_data(batch_size, val_batch_size, data_root, num_workers, **cfg_dataloader)
     elif dataname in ['mmnist', 'mfmnist', 'mmnist_cifar']:  # 'mmnist', 'mfmnist', 'mmnist_cifar'
         from .dataloader_moving_mnist import load_data
         cfg_dataloader['data_name'] = kwargs.get('data_name', 'mnist')

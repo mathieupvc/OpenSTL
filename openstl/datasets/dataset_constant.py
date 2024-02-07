@@ -74,6 +74,13 @@ dataset_parameters = {
         'total_length': 50,
         'metrics': ['mse', 'mae', 'ssim', 'psnr', 'lpips'],
     },
+    'davis': {
+            'in_shape': [10, 1, 50, 50],
+            'pre_seq_length': 10,
+            'aft_seq_length': 10,
+            'total_length': 20,
+            'metrics': ['mse', 'mae'],
+        },
     'kitticaltech': {
         'in_shape': [10, 3, 128, 160],
         'pre_seq_length': 10,

@@ -1,8 +1,11 @@
 import os
 import random
 import cv2
+from skimage.transform import downscale_local_mean
 import numpy as np
 from PIL import Image
+from collections import defaultdict
+from glob import glob
 
 import torch
 import torch.nn.functional as F
@@ -10,12 +13,107 @@ from torch.utils.data import Dataset
 
 from openstl.datasets.utils import create_loader
 
+class DAVIS(object):
+    SUBSET_OPTIONS = ['train', 'val', 'test-dev', 'test-challenge']
+    TASKS = ['semi-supervised', 'unsupervised']
+    DATASET_WEB = 'https://davischallenge.org/davis2017/code.html'
+    VOID_LABEL = 255
 
-class KTHDataset(Dataset):
-    """KTH Action <https://ieeexplore.ieee.org/document/1334462>`_ Dataset"""
+    def __init__(self, root, task='unsupervised', subset='val', sequences='all', resolution='480p', codalab=False):
+        """
+        Class to read the DAVIS dataset
+        :param root: Path to the DAVIS folder that contains JPEGImages, Annotations, etc. folders.
+        :param task: Task to load the annotations, choose between semi-supervised or unsupervised.
+        :param subset: Set to load the annotations
+        :param sequences: Sequences to consider, 'all' to use all the sequences in a set.
+        :param resolution: Specify the resolution to use the dataset, choose between '480' and 'Full-Resolution'
+        """
+        if subset not in self.SUBSET_OPTIONS:
+            raise ValueError(f'Subset should be in {self.SUBSET_OPTIONS}')
+        if task not in self.TASKS:
+            raise ValueError(f'The only tasks that are supported are {self.TASKS}')
+
+        self.task = task
+        self.subset = subset
+        self.root = root
+        self.img_path = os.path.join(self.root, 'JPEGImages', resolution)
+        annotations_folder = 'Annotations' if task == 'semi-supervised' else 'Annotations_unsupervised'
+        self.mask_path = os.path.join(self.root, annotations_folder, resolution)
+        year = '2019' if task == 'unsupervised' and (subset == 'test-dev' or subset == 'test-challenge') else '2017'
+        self.imagesets_path = os.path.join(self.root, 'ImageSets', year)
+
+        self._check_directories()
+
+        if sequences == 'all':
+            with open(os.path.join(self.imagesets_path, f'{self.subset}.txt'), 'r') as f:
+                tmp = f.readlines()
+            sequences_names = [x.strip() for x in tmp]
+        else:
+            sequences_names = sequences if isinstance(sequences, list) else [sequences]
+        self.sequences = defaultdict(dict)
+
+        for seq in sequences_names:
+            images = np.sort(glob(os.path.join(self.img_path, seq, '*.jpg'))).tolist()
+            if len(images) == 0 and not codalab:
+                raise FileNotFoundError(f'Images for sequence {seq} not found.')
+            self.sequences[seq]['images'] = images
+            masks = np.sort(glob(os.path.join(self.mask_path, seq, '*.png'))).tolist()
+            masks.extend([-1] * (len(images) - len(masks)))
+            self.sequences[seq]['masks'] = masks
+
+    def _check_directories(self):
+        if not os.path.exists(self.root):
+            raise FileNotFoundError(f'DAVIS not found in the specified directory, download it from {self.DATASET_WEB}')
+        if not os.path.exists(os.path.join(self.imagesets_path, f'{self.subset}.txt')):
+            raise FileNotFoundError(f'Subset sequences list for {self.subset} not found, download the missing subset '
+                                    f'for the {self.task} task from {self.DATASET_WEB}')
+        if self.subset in ['train', 'val'] and not os.path.exists(self.mask_path):
+            raise FileNotFoundError(f'Annotations folder for the {self.task} task not found, download it from {self.DATASET_WEB}')
+
+    def get_frames(self, sequence):
+        for img, msk in zip(self.sequences[sequence]['images'], self.sequences[sequence]['masks']):
+            image = np.array(Image.open(img))
+            mask = None if msk is None else np.array(Image.open(msk))
+            yield image, mask
+
+    def _get_all_elements(self, sequence, obj_type):
+        obj = np.array(Image.open(self.sequences[sequence][obj_type][0]))
+        all_objs = np.zeros((len(self.sequences[sequence][obj_type]), *obj.shape))
+        obj_id = []
+        for i, obj in enumerate(self.sequences[sequence][obj_type]):
+            all_objs[i, ...] = np.array(Image.open(obj))
+            obj_id.append(''.join(obj.split('/')[-1].split('.')[:-1]))
+        return all_objs, obj_id
+
+    def get_all_images(self, sequence):
+        return self._get_all_elements(sequence, 'images')
+
+    def get_all_masks(self, sequence, separate_objects_masks=False):
+        masks, masks_id = self._get_all_elements(sequence, 'masks')
+        masks_void = np.zeros_like(masks)
+
+        # Separate void and object masks
+        for i in range(masks.shape[0]):
+            masks_void[i, ...] = masks[i, ...] == 255
+            masks[i, masks[i, ...] == 255] = 0
+
+        if separate_objects_masks:
+            num_objects = int(np.max(masks[0, ...]))
+            tmp = np.ones((num_objects, *masks.shape))
+            tmp = tmp * np.arange(1, num_objects + 1)[:, None, None, None]
+            masks = (tmp == masks[None, ...])
+            masks = masks > 0
+        return masks, masks_void, masks_id
+
+    def get_sequences(self):
+        for seq in self.sequences:
+            yield seq
+
+class DAVISDataset(Dataset):
+    """DAVIS <https://davischallenge.org/>`_ Dataset"""
 
     def __init__(self, datas, indices, pre_seq_length, aft_seq_length, use_augment=False):
-        super(KTHDataset,self).__init__()
+        super(DAVISDataset,self).__init__()
         self.datas = datas.swapaxes(2, 3).swapaxes(1,2)
         self.indices = indices
         self.pre_seq_length = pre_seq_length
@@ -26,7 +124,7 @@ class KTHDataset(Dataset):
 
     def _augment_seq(self, imgs, crop_scale=0.95):
         """Augmentations for video"""
-        _, _, h, w = imgs.shape  # original shape, e.g., [10, 3, 128, 128]
+        _, _, h, w = imgs.shape  # original shape, e.g., [10, 1, 128, 128]
         imgs = F.interpolate(imgs, scale_factor=1 / crop_scale, mode='bilinear')
         _, _, ih, iw = imgs.shape
         # Random Crop
@@ -118,17 +216,7 @@ class DataProcess(object):
 
     def __init__(self, input_param):
         self.paths = input_param['paths']
-        self.category_1 = ['boxing', 'handclapping', 'handwaving', 'walking']
-        self.category_2 = ['jogging', 'running']
-        self.category = self.category_1 + self.category_2
         self.image_width = input_param['image_width']
-
-        self.train_person = [
-            '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12',
-            '13', '14', '15', '16'
-        ]
-        # self.test_person = ['17', '18', '19', '20', '21', '22', '23', '24', '25']
-        self.test_person = ['17', '18', '19', '20', '21']
 
         self.input_param = input_param
         self.seq_len = input_param['seq_length']
@@ -143,76 +231,35 @@ class DataProcess(object):
         """
         assert mode in ['train', 'test']
         if mode == 'train':
-            person_id = self.train_person
+            davis_data = DAVIS(root=os.path.join(self.paths, 'train_val'), subset='train')
         else:
-            person_id = self.test_person
+            davis_data = DAVIS(root=os.path.join(self.paths, 'test_challenge'), subset='test-challenge')
         print('begin load data' + str(path))
 
-        frames_np = []
-        frames_file_name = []
-        frames_person_mark = []
-        frames_category = []
-        person_mark = 0
+        data = []
+        indices = [0]
+        for i, seq in enumerate(davis_data.sequences):
+            if i > 0:
+                indices.append(indices[-1] + nb_images)
+            images, _ = davis_data.get_all_images(seq)
+            images = (0.3 * images[..., 0] + 0.59 * images[..., 1] + 0.11 * images[..., 2]).astype(np.uint8)  # convert to gray scale
+            crop_size = int((images.shape[2] - 480) / 2)
+            odd = images.shape[2] % 2
+            images = images[:, :, crop_size:-crop_size-odd]  # take the center of images to obtain a square image
+            images = images[:, 24:-24, 24:-24]  # Take center to set size to (432, 432)
+            images = images[:, 91:-91, 91:-91]  # crop like in pred retina experiment (but without the upsampling)
+            nb_images = images.shape[0]
+            data.append(images)
 
-        c_dir_list = self.category
-        frame_category_flag = -1
-        for c_dir in c_dir_list:  # handwaving
-            if c_dir in self.category_1:
-                frame_category_flag = 1  # 20 step
-            elif c_dir in self.category_2:
-                frame_category_flag = 2  # 3 step
-            else:
-                print('category error!!!')
-
-            c_dir_path = os.path.join(path, c_dir)
-            p_c_dir_list = os.listdir(c_dir_path)
-            # p_c_dir_list.sort() # for date seq
-
-            for p_c_dir in p_c_dir_list:  # person01_handwaving_d1_uncomp
-                # print(p_c_dir)
-                if p_c_dir[6:8] not in person_id:
-                    continue
-                person_mark += 1
-
-                dir_path = os.path.join(c_dir_path, p_c_dir)
-                filelist = os.listdir(dir_path)
-                filelist.sort()  # tocheck
-                for cur_file in filelist:  # image_0257
-                    if not cur_file.startswith('image'):
-                        continue
-
-                    frame_im = Image.open(os.path.join(dir_path, cur_file))
-                    frame_np = np.array(frame_im)  # (1000, 1000) numpy array
-                    # print(frame_np.shape)
-                    frame_np = frame_np[:, :, 0]  #
-                    frames_np.append(frame_np)
-                    frames_file_name.append(cur_file)
-                    frames_person_mark.append(person_mark)
-                    frames_category.append(frame_category_flag)
-
-        # is it a begin index of sequence
-        indices = []
-        index = len(frames_person_mark) - 1
-        while index >= self.seq_len - 1:
-            if frames_person_mark[index] == frames_person_mark[index - self.seq_len + 1]:
-                end = int(frames_file_name[index][6:10])
-                start = int(frames_file_name[index - self.seq_len + 1][6:10])
-
-                if end - start == self.seq_len - 1:
-                    indices.append(index - self.seq_len + 1)
-                    if frames_category[index] == 1:
-                        index -= self.seq_len - 1
-                    elif frames_category[index] == 2:
-                        index -= 2
-                    else:
-                        print('category error 2 !!!')
-            index -= 1
-
-        frames_np = np.asarray(frames_np)
-        data = np.zeros((frames_np.shape[0], self.image_width, self.image_width, 1))
-        for i in range(len(frames_np)):
-            temp = np.float32(frames_np[i, :, :])
-            data[i, :, :, 0] = cv2.resize(temp, (self.image_width, self.image_width)) / 255
+        print('indices:')
+        print(indices)
+        data = np.concatenate(data, axis=0)
+        print(data.shape)
+        data = downscale_local_mean(data.astype(np.float32), (1, 5, 5))
+        print(data.shape)
+        data = data[:, :, :, np.newaxis]
+        # data = np.float32(data) / 255
+        data = data / 255
         print('there are ' + str(data.shape[0]) + ' pictures')
         print('there are ' + str(len(indices)) + ' sequences')
         return data, indices
@@ -227,13 +274,13 @@ class DataProcess(object):
 
 
 def load_data(batch_size, val_batch_size, data_root, num_workers=4,
-              pre_seq_length=10, aft_seq_length=20, in_shape=[10, 1, 128, 128],
+              pre_seq_length=10, aft_seq_length=10, in_shape=[10, 1, 50, 50],
               distributed=False, use_augment=False, use_prefetcher=False, drop_last=False):
 
-    img_width = in_shape[-1] if in_shape is not None else 128
+    img_width = in_shape[-1] if in_shape is not None else 50
     # pre_seq_length, aft_seq_length = 10, 10
     input_param = {
-        'paths': os.path.join(data_root, 'kth'),
+        'paths': os.path.join(data_root, 'DAVIS'),
         'image_width': img_width,
         'minibatch_size': batch_size,
         'seq_length': (pre_seq_length + aft_seq_length),
@@ -244,11 +291,11 @@ def load_data(batch_size, val_batch_size, data_root, num_workers=4,
     train_input_handle = input_handle.get_train_input_handle()
     test_input_handle = input_handle.get_test_input_handle()
 
-    train_set = KTHDataset(train_input_handle.datas,
+    train_set = DAVISDataset(train_input_handle.datas,
                            train_input_handle.indices,
                            pre_seq_length,
                            aft_seq_length, use_augment=use_augment)
-    test_set = KTHDataset(test_input_handle.datas,
+    test_set = DAVISDataset(test_input_handle.datas,
                           test_input_handle.indices,
                           pre_seq_length,
                           aft_seq_length, use_augment=False)
@@ -274,9 +321,9 @@ if __name__ == '__main__':
     dataloader_train, _, dataloader_test = \
         load_data(batch_size=16,
                 val_batch_size=4,
-                data_root='/home/mathieupvc/Code/SimVPv2/data',
+                data_root='/home/mathieupvc/These/data',
                 num_workers=4,
-                pre_seq_length=10, aft_seq_length=20)
+                pre_seq_length=10, aft_seq_length=10)
 
     print(len(dataloader_train), len(dataloader_test))
     for item in dataloader_train:
