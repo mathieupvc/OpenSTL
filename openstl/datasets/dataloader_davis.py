@@ -229,9 +229,9 @@ class DataProcess(object):
         Returns:
             A dataset and indices of the sequence.
         """
-        assert mode in ['train', 'test']
-        if mode == 'train':
-            davis_data = DAVIS(root=os.path.join(self.paths, 'train_val'), subset='train')
+        assert mode in ['train', 'val', 'test']
+        if mode in ['train', 'val']:
+            davis_data = DAVIS(root=os.path.join(self.paths, 'train_val'), subset=mode)
         else:
             davis_data = DAVIS(root=os.path.join(self.paths, 'test_challenge'), subset='test-challenge')
         print('begin load data' + str(path))
@@ -251,12 +251,8 @@ class DataProcess(object):
             nb_images = images.shape[0]
             data.append(images)
 
-        print('indices:')
-        print(indices)
         data = np.concatenate(data, axis=0)
-        print(data.shape)
         data = downscale_local_mean(data.astype(np.float32), (1, 5, 5))
-        print(data.shape)
         data = data[:, :, :, np.newaxis]
         # data = np.float32(data) / 255
         data = data / 255
@@ -267,6 +263,10 @@ class DataProcess(object):
     def get_train_input_handle(self):
         train_data, train_indices = self.load_data(self.paths, mode='train')
         return InputHandle(train_data, train_indices, self.input_param)
+
+    def get_val_input_handle(self):
+        val_data, val_indices = self.load_data(self.paths, mode='val')
+        return InputHandle(val_data, val_indices, self.input_param)
 
     def get_test_input_handle(self):
         test_data, test_indices = self.load_data(self.paths, mode='test')
@@ -289,12 +289,17 @@ def load_data(batch_size, val_batch_size, data_root, num_workers=4,
     }
     input_handle = DataProcess(input_param)
     train_input_handle = input_handle.get_train_input_handle()
+    val_input_handle = input_handle.get_val_input_handle()
     test_input_handle = input_handle.get_test_input_handle()
 
     train_set = DAVISDataset(train_input_handle.datas,
                            train_input_handle.indices,
                            pre_seq_length,
                            aft_seq_length, use_augment=use_augment)
+    val_set = DAVISDataset(val_input_handle.datas,
+                         val_input_handle.indices,
+                         pre_seq_length,
+                         aft_seq_length, use_augment=False)
     test_set = DAVISDataset(test_input_handle.datas,
                           test_input_handle.indices,
                           pre_seq_length,
@@ -306,7 +311,12 @@ def load_data(batch_size, val_batch_size, data_root, num_workers=4,
                                      pin_memory=True, drop_last=True,
                                      num_workers=num_workers,
                                      distributed=distributed, use_prefetcher=use_prefetcher)
-    dataloader_vali = None
+    dataloader_vali = create_loader(val_set,
+                                     batch_size=val_batch_size,
+                                     shuffle=False, is_training=False,
+                                     pin_memory=True, drop_last=drop_last,
+                                     num_workers=num_workers,
+                                     distributed=distributed, use_prefetcher=use_prefetcher)
     dataloader_test = create_loader(test_set,
                                     batch_size=val_batch_size,
                                     shuffle=False, is_training=False,
