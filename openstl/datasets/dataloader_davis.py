@@ -239,8 +239,6 @@ class DataProcess(object):
         data = []
         indices = [0]
         for i, seq in enumerate(davis_data.sequences):
-            if i > 0:
-                indices.append(indices[-1] + nb_images)
             images, _ = davis_data.get_all_images(seq)
             images = (0.3 * images[..., 0] + 0.59 * images[..., 1] + 0.11 * images[..., 2]).astype(np.uint8)  # convert to gray scale
             crop_size = int((images.shape[2] - 480) / 2)
@@ -248,9 +246,15 @@ class DataProcess(object):
             images = images[:, :, crop_size:-crop_size-odd]  # take the center of images to obtain a square image
             images = images[:, 24:-24, 24:-24]  # Take center to set size to (432, 432)
             images = images[:, 91:-91, 91:-91]  # crop like in pred retina experiment (but without the upsampling)
-            nb_images = images.shape[0]
-            data.append(images)
+            nb_full_sequences = images.shape[0] // self.seq_len
+            assert nb_full_sequences >= 1
+            data.append(images[:nb_full_sequences*self.seq_len, :, :])
+            if i == 0:
+                nb_full_sequences -= 1  # in the first seq, the first index is already added
+            for s in range(nb_full_sequences):
+                indices.append(indices[-1] + self.seq_len)
 
+        print(indices)
         data = np.concatenate(data, axis=0)
         data = downscale_local_mean(data.astype(np.float32), (1, 5, 5))
         data = data[:, :, :, np.newaxis]
