@@ -243,7 +243,6 @@ class DataProcess(object):
         indices = [0]
         for d, davis_data in enumerate(datasets):
             for i, seq in enumerate(davis_data.sequences):
-                print(seq)
                 images, _ = davis_data.get_all_images(seq)
                 images = (0.3 * images[..., 0] + 0.59 * images[..., 1] + 0.11 * images[..., 2]).astype(np.uint8)  # convert to gray scale
                 crop_size = int((images.shape[2] - 480) / 2)
@@ -268,7 +267,6 @@ class DataProcess(object):
                     else:
                         indices = indices + [ind + indices[-1] + self.seq_len for ind in range(nb_sequences)]
 
-        print(indices)
         data = np.concatenate(data, axis=0)
         data = downscale_local_mean(data.astype(np.float32), (1, 5, 5))
         data = data[:, :, :, np.newaxis]
@@ -349,9 +347,9 @@ if __name__ == '__main__':
     dataloader_train, _, dataloader_test = \
         load_data(batch_size=16,
                 val_batch_size=4,
-                data_root='/home/mathieupvc/These/data',
+                data_root='/home/mathieu/These/data',
                 num_workers=4,
-                pre_seq_length=10, aft_seq_length=10)
+                pre_seq_length=10, aft_seq_length=3)
 
     print(len(dataloader_train), len(dataloader_test))
     for item in dataloader_train:
