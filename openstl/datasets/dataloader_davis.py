@@ -230,7 +230,8 @@ class DataProcess(object):
             A dataset and indices of the sequence.
         """
         assert mode in ['train', 'val', 'test']
-        if mode in ['train', 'val']:
+        # if mode in ['train', 'val']:
+        if mode in ['train', 'val', 'test']:  # try testing on training set
             davis_data_train = DAVIS(root=os.path.join(self.paths, 'train_val'), subset=mode)
             datasets = [davis_data_train]
         else:
