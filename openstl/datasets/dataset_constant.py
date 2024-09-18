@@ -77,8 +77,8 @@ dataset_parameters = {
     'davis': {
             'in_shape': [10, 1, 50, 50],
             'pre_seq_length': 10,
-            'aft_seq_length': 10,
-            'total_length': 20,
+            'aft_seq_length': 3,
+            'total_length': 13,
             'metrics': ['mse', 'mae'],
         },
     'kitticaltech': {
