@@ -75,7 +75,7 @@ dataset_parameters = {
         'metrics': ['mse', 'mae', 'ssim', 'psnr', 'lpips'],
     },
     'davis': {
-            'in_shape': [10, 1, 50, 50],
+            'in_shape': [19, 1, 50, 50],
             'pre_seq_length': 19,
             'aft_seq_length': 1,
             'total_length': 20,
