@@ -290,7 +290,7 @@ class DataProcess(object):
 
 
 def load_data(batch_size, val_batch_size, data_root, num_workers=4,
-              pre_seq_length=10, aft_seq_length=10, in_shape=[10, 1, 50, 50],
+              pre_seq_length=10, aft_seq_length=3, in_shape=[10, 1, 50, 50],
               distributed=False, use_augment=False, use_prefetcher=False, drop_last=False):
 
     img_width = in_shape[-1] if in_shape is not None else 50
