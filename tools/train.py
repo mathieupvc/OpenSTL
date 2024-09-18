@@ -17,9 +17,7 @@ except ImportError:
 
 if __name__ == '__main__':
     args = create_parser().parse_args()
-    print(args)
     config = args.__dict__
-    print(config)
 
     if has_nni:
         tuner_params = nni.get_next_parameter()
@@ -32,18 +30,14 @@ if __name__ == '__main__':
                                exclude_keys=['method'])
     else:
         loaded_cfg = load_config(cfg_path)
-        print(loaded_cfg)
         config = update_config(config, loaded_cfg,
                                exclude_keys=['method', 'batch_size', 'val_batch_size',
                                              'drop_path', 'warmup_epoch'])
-        print(config['aft_seq_length'])
         default_values = default_parser()
-        print(default_values['aft_seq_length'])
         for attribute in default_values.keys():
             if config[attribute] is None:
                 config[attribute] = default_values[attribute]
 
-    print(config['aft_seq_length'])
     # set multi-process settings
     setup_multi_processes(config)
 
